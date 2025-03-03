@@ -1,0 +1,140 @@
+import tkinter as tk
+from tkinter import messagebox, ttk
+import pandas as pd
+import sqlite3
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email import encoders
+import datetime
+import os
+from collections import Counter
+
+EMAILS_FILE = "saved_emails.csv"
+DB_FILE = "attendance.db"
+
+# Load saved emails for dropdown with frequency
+def load_emails():
+    if os.path.exists(EMAILS_FILE):
+        df = pd.read_csv(EMAILS_FILE, header=None, names=["Email"])
+        email_counts = Counter(df["Email"])
+        sorted_emails = sorted(email_counts.items(), key=lambda x: x[1], reverse=True)
+        return [email for email, count in sorted_emails]
+    return []
+
+# Save new email to dropdown list
+def save_email(email):
+    emails = load_emails()
+    with open(EMAILS_FILE, "a") as f:
+        f.write(email + "\n")
+
+# Fetch attendance data and display in table
+def load_attendance():
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM attendance")
+    rows = cursor.fetchall()
+    conn.close()
+
+    # Clear the table
+    for row in tree.get_children():
+        tree.delete(row)
+
+    # Insert new data
+    for row in rows:
+        tree.insert("", tk.END, values=row)
+
+# Generate Attendance Report (CSV format)
+def generate_report():
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        df = pd.read_sql("SELECT * FROM attendance", conn)
+        conn.close()
+
+        global report_filename
+        report_filename = f"Attendance_Report_{datetime.datetime.now().strftime('%Y-%m-%d')}.csv"
+        df.to_csv(report_filename, index=False)  # Save as CSV file
+        messagebox.showinfo("Success", f"Attendance report saved as {report_filename}!")
+    except Exception as e:
+        messagebox.showerror("Error", f"Failed to generate report: {e}")
+
+# Send Attendance Report via Email
+def send_report():
+    def send_email():
+        recipient = email_var.get().strip()
+        if not recipient:
+            messagebox.showerror("Error", "Please enter an email address!")
+            return
+        
+        if not os.path.exists(report_filename):
+            messagebox.showerror("Error", "No report found! Please generate the report first.")
+            return
+
+        save_email(recipient)  # Save email for future use
+
+        try:
+            sender_email = "your_email@gmail.com"
+            sender_password = "your_app_password"
+
+            msg = MIMEMultipart()
+            msg["From"] = sender_email
+            msg["To"] = recipient
+            msg["Subject"] = "Attendance Report"
+
+            # Email body
+            msg.attach(MIMEText("Please find the attached attendance report.", "plain"))
+
+            # Attach CSV file
+            with open(report_filename, "rb") as attachment:
+                part = MIMEBase("application", "octet-stream")
+                part.set_payload(attachment.read())
+                encoders.encode_base64(part)
+                part.add_header("Content-Disposition", f"attachment; filename={report_filename}")
+                msg.attach(part)
+
+            # Send email
+            with smtplib.SMTP("smtp.gmail.com", 587) as server:
+                server.starttls()
+                server.login(sender_email, sender_password)
+                server.sendmail(sender_email, recipient, msg.as_string())
+
+            messagebox.showinfo("Success", "Email sent successfully!")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to send email: {e}")
+
+    # Email entry popup
+    email_window = tk.Toplevel(root)
+    email_window.title("Send Report")
+    tk.Label(email_window, text="Enter Email:").pack(pady=5)
+    
+    email_var = tk.StringVar()
+    email_dropdown = ttk.Combobox(email_window, textvariable=email_var, values=load_emails(), width=30)
+    email_dropdown.pack(pady=5)
+    
+    tk.Button(email_window, text="Send", command=send_email).pack(pady=10)
+
+# Tkinter GUI
+root = tk.Tk()
+root.title("Attendance Report")
+root.geometry("600x400")
+
+# Table Frame
+frame = tk.Frame(root)
+frame.pack(pady=10)
+
+# Create Table
+tree = ttk.Treeview(frame, columns=("ID", "Name", "Date", "Status"), show="headings")
+tree.heading("ID", text="ID")
+tree.heading("Name", text="Name")
+tree.heading("Date", text="Date")
+tree.heading("Status", text="Status")
+
+tree.pack()
+
+# Buttons
+tk.Button(root, text="Load Attendance", command=load_attendance, width=20, height=2).pack(pady=5)
+tk.Button(root, text="Generate Report", command=generate_report, width=20, height=2).pack(pady=5)
+tk.Button(root, text="Send Report", command=send_report, width=20, height=2).pack(pady=5)
+
+root.mainloop()
