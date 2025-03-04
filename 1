@@ -1,3 +1,10 @@
+import sys
+import os
+
+# Add the 'lib' folder to Python's module search path
+sys.path.insert(0, os.path.abspath("/home/project/Desktop/Att/lib"))
+
+
 import tkinter as tk
 from tkinter import messagebox, ttk
 import pandas as pd
@@ -74,9 +81,8 @@ def send_report():
         save_email(recipient)  # Save email for future use
 
         try:
-            sender_email = "your_email@gmail.com"
-            sender_password = "your_app_password"
-
+            sender_email = "karanam.vadeendra123456@gmail.com"
+            sender_password = "jbgr ojvy hfyl wveu"
             msg = MIMEMultipart()
             msg["From"] = sender_email
             msg["To"] = recipient
