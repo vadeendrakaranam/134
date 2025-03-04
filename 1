@@ -1,10 +1,5 @@
 import sys
 import os
-
-# Add the 'lib' folder to Python's module search path
-sys.path.insert(0, os.path.abspath("/home/project/Desktop/Att/lib"))
-
-
 import tkinter as tk
 from tkinter import messagebox, ttk
 import pandas as pd
@@ -15,28 +10,43 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email import encoders
 import datetime
-import os
 from collections import Counter
 
+# File Paths
 EMAILS_FILE = "saved_emails.csv"
 DB_FILE = "attendance.db"
 
-# Load saved emails for dropdown with frequency
-def load_emails():
-    if os.path.exists(EMAILS_FILE):
-        df = pd.read_csv(EMAILS_FILE, header=None, names=["Email"])
-        email_counts = Counter(df["Email"])
-        sorted_emails = sorted(email_counts.items(), key=lambda x: x[1], reverse=True)
-        return [email for email, count in sorted_emails]
-    return []
+# Ensure the database and table exist
+def initialize_database():
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute('''CREATE TABLE IF NOT EXISTS attendance (
+                        ID INTEGER PRIMARY KEY AUTOINCREMENT,
+                        Name TEXT,
+                        Date TEXT,
+                        Status TEXT)''')
+    conn.commit()
+    conn.close()
 
-# Save new email to dropdown list
-def save_email(email):
-    emails = load_emails()
-    with open(EMAILS_FILE, "a") as f:
-        f.write(email + "\n")
+# Automatically update attendance each time script runs
+def update_attendance():
+    initialize_database()
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
 
-# Fetch attendance data and display in table
+    today_date = datetime.datetime.now().strftime("%Y-%m-%d")
+    
+    # Example data (modify as needed)
+    example_attendance = [
+        ("John Doe", today_date, "Present"),
+        ("Jane Smith", today_date, "Present")
+    ]
+    
+    cursor.executemany("INSERT INTO attendance (Name, Date, Status) VALUES (?, ?, ?)", example_attendance)
+    conn.commit()
+    conn.close()
+
+# Load attendance data into the table
 def load_attendance():
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
@@ -61,10 +71,24 @@ def generate_report():
 
         global report_filename
         report_filename = f"Attendance_Report_{datetime.datetime.now().strftime('%Y-%m-%d')}.csv"
-        df.to_csv(report_filename, index=False)  # Save as CSV file
+        df.to_csv(report_filename, index=False)  
         messagebox.showinfo("Success", f"Attendance report saved as {report_filename}!")
     except Exception as e:
         messagebox.showerror("Error", f"Failed to generate report: {e}")
+
+# Load saved emails for dropdown (sorted by frequency)
+def load_emails():
+    if os.path.exists(EMAILS_FILE):
+        df = pd.read_csv(EMAILS_FILE, header=None, names=["Email"])
+        email_counts = Counter(df["Email"])
+        sorted_emails = sorted(email_counts.items(), key=lambda x: x[1], reverse=True)
+        return [email for email, count in sorted_emails]
+    return []
+
+# Save new email for future use
+def save_email(email):
+    with open(EMAILS_FILE, "a") as f:
+        f.write(email + "\n")
 
 # Send Attendance Report via Email
 def send_report():
@@ -78,17 +102,16 @@ def send_report():
             messagebox.showerror("Error", "No report found! Please generate the report first.")
             return
 
-        save_email(recipient)  # Save email for future use
+        save_email(recipient)  # Save email for dropdown
 
         try:
             sender_email = "karanam.vadeendra123456@gmail.com"
             sender_password = "jbgr ojvy hfyl wveu"
+
             msg = MIMEMultipart()
             msg["From"] = sender_email
             msg["To"] = recipient
             msg["Subject"] = "Attendance Report"
-
-            # Email body
             msg.attach(MIMEText("Please find the attached attendance report.", "plain"))
 
             # Attach CSV file
@@ -120,6 +143,9 @@ def send_report():
     
     tk.Button(email_window, text="Send", command=send_email).pack(pady=10)
 
+# Initialize Attendance Data
+update_attendance()
+
 # Tkinter GUI
 root = tk.Tk()
 root.title("Attendance Report")
@@ -135,7 +161,6 @@ tree.heading("ID", text="ID")
 tree.heading("Name", text="Name")
 tree.heading("Date", text="Date")
 tree.heading("Status", text="Status")
-
 tree.pack()
 
 # Buttons
